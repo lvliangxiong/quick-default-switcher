@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Icon, MenuBarExtra, getApplications, getDefaultApplication, open } from "@raycast/api";
-import { exec } from "child_process";
-import { error } from "console";
+import { Icon, MenuBarExtra, getApplications, getDefaultApplication, open, showHUD } from "@raycast/api";
+import { exec, execSync } from "child_process";
 
 
 type Browser = { name: string, path: string, alias: string | undefined };
+
+const DefaultBrowserCli = 'defaultbrowser'
 
 const useBrowsers = () => {
   const [state, setState] = useState<{ current: Browser; available: Browser[]; isLoading: boolean }>({
@@ -14,42 +15,53 @@ const useBrowsers = () => {
   });
   useEffect(() => {
     (async () => {
-      const browsers = await getApplications().then(
+      let browsers = await getApplications().then(
         (apps) => {
           return apps.filter(
-            (app) => supportedBrowsers.get(app.name) != undefined
+            (app) => browserName2Alias.get(app.name) != undefined
           )
         }
       )
 
+      const currentBrowserAlias = execSync(DefaultBrowserCli, { encoding: "utf-8" }).split('\n').find((sent) => sent.startsWith("* "))?.replace("* ", "")
+      const currentBrowserName = browserAlias2Name.get(currentBrowserAlias ? currentBrowserAlias : "")
+      const currentBrowser = browsers.find((browser) => browser.name === currentBrowserName)
+
+      browsers = browsers.filter((browser) => browser.name !== currentBrowserName)
+
       setState({
-        current: { name: "Chrome", path: "/Applications/Google Chrome.app", alias: "" },
+        current: {
+          name: currentBrowser === undefined ? "" : currentBrowser.name,
+          path: currentBrowser === undefined ? "" : currentBrowser.path,
+          alias: currentBrowserAlias
+        },
         available: browsers.map(
           (browser) => {
-            return { name: browser.name, path: browser.path, alias: supportedBrowsers.get(browser.name)?.alias }
+            return { name: browser.name, path: browser.path, alias: browserName2Alias.get(browser.name) }
           }
         ),
         isLoading: false,
       });
-      // setState({
-      //   current: { name: "Chrome", path: "/Applications/Google Chrome.app", alias: "" },
-      //   available: [
-      //     { name: "Safari", path: "/Applications/Safari.app", alias: "" },
-      //     { name: "Chrome", path: "/Applications/Google Chrome.app", alias: "" },
-      //     { name: "Edge", path: "/Applications/Microsoft Edge.app", alias: "" },
-      //   ],
-      //   isLoading: false,
-      // });
     })();
   }, []);
   return state;
 };
 
-const supportedBrowsers = new Map([
-  ["Safari", { name: "Safari", alias: "safari", }],
-  ["Google Chrome", { name: "Google Chrome", alias: "chrome" }],
-  ["Microsoft Edge", { name: "Microsoft Edge", alias: "edgemac" }],
-])
+const browserAlias2Name = new Map(
+  [
+    ["safari", "Safari"],
+    ["chrome", "Google Chrome"],
+    ["edgemac", "Microsoft Edge"],
+  ]
+)
+
+const browserName2Alias = new Map(
+  [
+    ["Safari", "safari"],
+    ["Google Chrome", "chrome"],
+    ["Microsoft Edge", "edgemac"],
+  ]
+)
 
 
 export default function Command() {
@@ -57,30 +69,43 @@ export default function Command() {
 
   return (
     <MenuBarExtra icon={Icon.Lock} isLoading={isLoading}>
-      {/* <MenuBarExtra.Section>
+      <MenuBarExtra.Section>
         <MenuBarExtra.Item title="Current" />
-        {<MenuBarExtra.Item
-          key={currentBrowser.name}
-          icon={{ fileIcon: currentBrowser.path }}
-          title={currentBrowser.name}
-        />}
-      </MenuBarExtra.Section> */}
+        {
+          <MenuBarExtra.Item
+            key={currentBrowser.name}
+            icon={{ fileIcon: currentBrowser.path }}
+            title={currentBrowser.name}
+            onAction={() => { }}
+          />
+        }
+      </MenuBarExtra.Section>
       <MenuBarExtra.Section>
         <MenuBarExtra.Item title="Available" />
-        {availableBrowsers.map((browser) => (
-          <MenuBarExtra.Item
-            key={browser.name}
-            icon={{ fileIcon: browser.path }}
-            title={browser.name}
-            onAction={() => {
-              exec(`defaultbrowser ${browser.alias}`, (err, stdout, stderr) => {
-                console.log(`err: ${err}`)
-                console.log(`stdout: ${stdout}`)
-                console.log(`stderr: ${stderr}`)
-              })
-            }}
-          />
-        ))}
+        {
+          availableBrowsers.map(
+            (browser) => (
+              <MenuBarExtra.Item
+                key={browser.name}
+                icon={{ fileIcon: browser.path }}
+                title={browser.name}
+                onAction={
+                  () => {
+                    browser.alias &&
+                      exec(
+                        `${DefaultBrowserCli} ${browser.alias}`,
+                        (err, stdout, stderr) => {
+                          console.log(`err: ${err}`)
+                          console.log(`stdout: ${stdout}`)
+                          console.log(`stderr: ${stderr}`)
+                        }
+                      )
+                  }
+                }
+              />
+            )
+          )
+        }
       </MenuBarExtra.Section>
     </MenuBarExtra>
   );
