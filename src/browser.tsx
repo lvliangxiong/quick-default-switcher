@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { Icon, MenuBarExtra, getApplications, getDefaultApplication, open, showHUD } from "@raycast/api";
-import { exec, execSync } from "child_process";
+import { Application, Icon, MenuBarExtra, Toast, confirmAlert, getApplications, getDefaultApplication, open, showHUD, showToast } from "@raycast/api";
+import { execSync } from "child_process";
 
 
 type Browser = { name: string, path: string, alias: string | undefined };
@@ -8,9 +8,10 @@ type Browser = { name: string, path: string, alias: string | undefined };
 const DefaultBrowserCli = 'defaultbrowser'
 
 const useBrowsers = () => {
-  const [state, setState] = useState<{ current: Browser; available: Browser[]; isLoading: boolean }>({
+  const [state, setState] = useState<{ current: Browser, available: Browser[], cliErr: string, isLoading: boolean }>({
     current: { name: "", path: "", alias: "" },
     available: [],
+    cliErr: "",
     isLoading: true,
   });
   useEffect(() => {
@@ -23,11 +24,22 @@ const useBrowsers = () => {
         }
       )
 
-      const currentBrowserAlias = execSync(DefaultBrowserCli, { encoding: "utf-8" }).split('\n').find((sent) => sent.startsWith("* "))?.replace("* ", "")
-      const currentBrowserName = browserAlias2Name.get(currentBrowserAlias ? currentBrowserAlias : "")
-      const currentBrowser = browsers.find((browser) => browser.name === currentBrowserName)
+      let currentBrowser: Application | undefined
+      let currentBrowserAlias: string | undefined
+      let cliErr: string = ""
 
-      browsers = browsers.filter((browser) => browser.name !== currentBrowserName)
+      try {
+        currentBrowserAlias = execSync(DefaultBrowserCli, { encoding: "utf-8" }).split('\n').find((sent) => sent.startsWith("* "))?.replace("* ", "")
+        const currentBrowserName = browserAlias2Name.get(currentBrowserAlias ? currentBrowserAlias : "")
+        currentBrowser = browsers.find((browser) => browser.name === currentBrowserName)
+
+        browsers = browsers.filter((browser) => browser.name !== currentBrowserName)
+      } catch (err: any) {
+        console.log(err.message)
+        cliErr = err
+      }
+
+      console.log(browsers)
 
       setState({
         current: {
@@ -40,6 +52,7 @@ const useBrowsers = () => {
             return { name: browser.name, path: browser.path, alias: browserName2Alias.get(browser.name) }
           }
         ),
+        cliErr: cliErr,
         isLoading: false,
       });
     })();
@@ -65,21 +78,23 @@ const browserName2Alias = new Map(
 
 
 export default function Command() {
-  const { current: currentBrowser, available: availableBrowsers, isLoading } = useBrowsers();
+  const { current: currentBrowser, available: availableBrowsers, cliErr, isLoading } = useBrowsers();
 
   return (
     <MenuBarExtra icon={Icon.Lock} isLoading={isLoading}>
-      <MenuBarExtra.Section>
-        <MenuBarExtra.Item title="Current" />
-        {
+      {
+        cliErr.length === 0 &&
+        <MenuBarExtra.Section>
+          <MenuBarExtra.Item title={"Current"} />
           <MenuBarExtra.Item
             key={currentBrowser.name}
             icon={{ fileIcon: currentBrowser.path }}
             title={currentBrowser.name}
             onAction={() => { }}
           />
-        }
-      </MenuBarExtra.Section>
+        </MenuBarExtra.Section>
+      }
+
       <MenuBarExtra.Section>
         <MenuBarExtra.Item title="Available" />
         {
@@ -91,15 +106,13 @@ export default function Command() {
                 title={browser.name}
                 onAction={
                   () => {
-                    browser.alias &&
-                      exec(
-                        `${DefaultBrowserCli} ${browser.alias}`,
-                        (err, stdout, stderr) => {
-                          console.log(`err: ${err}`)
-                          console.log(`stdout: ${stdout}`)
-                          console.log(`stderr: ${stderr}`)
-                        }
+                    try {
+                      execSync(
+                        `${DefaultBrowserCli} ${browser.alias}`
                       )
+                    } catch (err: any) {
+                      confirmAlert({ title: "Something went wrong!", message: err.message })
+                    }
                   }
                 }
               />
