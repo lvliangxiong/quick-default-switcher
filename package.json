@@ -2,8 +2,8 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "quick-default-switcher",
   "title": "Quick Default Switcher",
-  "description": "Quick switch default apps.",
-  "icon": "command-icon.png",
+  "description": "Quick switch default apps. Only default browser switch is supported till now.",
+  "icon": "extension-icon.png",
   "author": "lvliangxiong",
   "owner": "joe-lee",
   "categories": [
@@ -17,8 +17,9 @@
     {
       "name": "browser",
       "title": "Switch Default Browser",
-      "description": "",
-      "mode": "menu-bar"
+      "description": "Switch default browser in the menu bar.",
+      "mode": "menu-bar",
+      "icon": "browser-icon.png"
     }
   ],
   "dependencies": {
